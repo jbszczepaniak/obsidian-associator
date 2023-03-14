@@ -110,7 +110,7 @@ export class ExampleSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("OpenAI Token")
-			.setDesc("Used to call Chat GPT on your behalf")
+			.setDesc("Used to call Chat GPT on your behalf. Can be found https://platform.openai.com/account/api-keys")
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.OpenAItoken)
@@ -122,7 +122,6 @@ export class ExampleSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("OpenAI Organisation")
-			// .setDesc("Used to call Chat GPT on your behalf")
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.OpenAIorganisation)

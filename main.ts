@@ -29,27 +29,32 @@ export default class MyPlugin extends Plugin {
 			const currName = this.app.workspace.getActiveFile()?.basename;
 			console.log(currName);
 			const allFiles = this.app.vault.getFiles()
-			const SUBSET_SIZE = 3;
-			const randomFiles = getRandomSubset(allFiles, SUBSET_SIZE);
+			const SUBSET_SIZE = 20;
+			const randomFiles = getRandomSubset(allFiles, SUBSET_SIZE)
+				.filter(n => !n.basename.startsWith("PNG")); // screenshots are saved in the vault with PNG at the front.
 
-			const message = "Utilisez les mots " + randomFiles[0].basename + " et " + currName + " dans court sentence.";
+			let message = "Entre les mots: "
+			randomFiles.forEach((file: TFile) => {
+				message += file.basename + ", "
+			})
+			message += ". Choisit un mot entre , qui et mieux associé avec "
+				+ currName + ". Utilisiez un mot choisit avec un mot donne dans un court sentence."
 
 			console.log(message);
-
 			const response = await this.openai.createChatCompletion({
 				model: "gpt-3.5-turbo", messages: [
 					{ role: "user", content: message },
 				]
 			});
 
-			const title = "Je connecte `" + randomFiles[0].basename + "` et `" + currName + "` pour toi.\n\n"
+			const title = "J'ai trouvé un association";
 			const responseText = response.data.choices[0].message?.content;
 
 			new SampleModal(this.app, responseText!, title).open();
 		});
 
 		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class'); // we could change it into loading while user is waiting for response?
+		// ribbonIconEl.addClass('my-plugin-ribbon-class'); // we could change it into loading while user is waiting for response?
 
 		this.addSettingTab(new ExampleSettingTab(this.app, this));
 	}

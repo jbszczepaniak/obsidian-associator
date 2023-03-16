@@ -1,4 +1,4 @@
-import { App, Modal, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { App, Modal, Plugin, PluginSettingTab, Setting, TFile, Notice } from 'obsidian';
 import { Configuration, OpenAIApi } from "openai";
 
 interface MyPluginSettings {
@@ -22,12 +22,19 @@ const SUBSET_SIZE = 3;
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 	openai: OpenAIApi;
+	lock: boolean;
 
 	async onload() {
 		await this.loadSettings();
 
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon('arrow-up-down', 'Sample Plugin', async (evt: MouseEvent) => {
+			if (this.lock == true) {
+				new Notice('Associator already in progress');
+				return;
+			}
+			this.lock = true;
+
 			const currName = this.app.workspace.getActiveFile()?.basename;
 
 			// if-else/strategy for noobs.
@@ -68,6 +75,7 @@ export default class MyPlugin extends Plugin {
 			const parsedResp = JSON.parse(response.data.choices[0].message?.content!);
 
 			new AssociatedWordsModal(this.app, parsedResp, title).open();
+			this.lock = false;
 		});
 
 		this.addSettingTab(new ExampleSettingTab(this.app, this));

@@ -1,5 +1,8 @@
+import { Console } from 'console';
 import { App, Modal, Plugin, PluginSettingTab, Setting, TFile, Notice } from 'obsidian';
 import { Configuration, OpenAIApi } from "openai";
+
+const SUBSET_SIZE = 5;
 
 interface MyPluginSettings {
 	OpenAItoken: string;
@@ -14,67 +17,60 @@ function getRandomSubset(arr: TFile[], size: Number) {
 	return arr.filter((v, i) => random.has(i));
 }
 
-
-
-const SUBSET_SIZE = 3;
-
-
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 	openai: OpenAIApi;
 	lock: boolean;
 
+	async guesser() {
+		const selected = window.getSelection()?.toString();
+		const response = await this.openai.createChatCompletion({
+			model: "gpt-3.5-turbo", messages: [
+				{ role: "user", content: "Devinez le mot - \"" + selected + "\". Repondez avec un seul mot." },
+			]
+		});
+		const currName = this.app.workspace.getActiveFile()?.basename;
+		new GuessedNameModal(this.app, response.data.choices[0].message?.content!, currName!).open();
+	}
+
+	async associator() {
+		const currName = this.app.workspace.getActiveFile()?.basename;
+		const allFiles = this.app.vault.getFiles()
+		const randomFiles = getRandomSubset(allFiles, SUBSET_SIZE)
+			.filter(n => !n.basename.startsWith("PNG")) // screenshots are saved in the vault with PNG at the front.
+			.filter(n => !n.basename.startsWith("Screenshot")) // screenshots are saved in the vault with Screenshot at the front.
+			.filter(n => !n.basename.startsWith("Untitled")); // new notes starts like that
+		const obj = {
+			main: currName,
+			candidates: randomFiles.map(f => f.basename)
+		};
+		const response = await this.openai.createChatCompletion({
+			model: "gpt-3.5-turbo", messages: [
+				{ role: "system", content: "Permutate main with every candidate, for each create short sentence that uses both words. Return as JSON with every candidate as key and sentence as value" },
+				{ role: "user", content: JSON.stringify(obj) },
+			]
+		});
+		const title = "J'ai trouvé des associations avec " + currName;
+		const parsedResp = JSON.parse(response.data.choices[0].message?.content!);
+		new AssociatedWordsModal(this.app, parsedResp, title).open();
+	}
+
 	async onload() {
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('arrow-up-down', 'Sample Plugin', async (evt: MouseEvent) => {
+		this.addRibbonIcon('arrow-up-down', 'Sample Plugin', async (evt: MouseEvent) => {
 			if (this.lock == true) {
 				new Notice('Associator already in progress');
 				return;
 			}
 			this.lock = true;
 
-			const currName = this.app.workspace.getActiveFile()?.basename;
-
-			// if-else/strategy for noobs.
 			const selected = window.getSelection()?.toString();
 			if (selected != "") {
-				console.log(selected)
-				const response = await this.openai.createChatCompletion({
-					model: "gpt-3.5-turbo", messages: [
-						{ role: "user", content: "Devinez le mot - \"" + selected + "\". Repondez avec un seul mot." },
-					]
-				});
-				console.log(response.data.choices[0].message?.content!)
-				new GuessedNameModal(this.app, response.data.choices[0].message?.content!, currName!).open();
-				return;
+				await this.guesser();
+			} else {
+				await this.associator();
 			}
-
-			const allFiles = this.app.vault.getFiles()
-			const randomFiles = getRandomSubset(allFiles, SUBSET_SIZE)
-				.filter(n => !n.basename.startsWith("PNG")) // screenshots are saved in the vault with PNG at the front.
-				.filter(n => !n.basename.startsWith("Screenshot")) // screenshots are saved in the vault with Screenshot at the front.
-				.filter(n => !n.basename.startsWith("Untitled")); // new notes starts like that
-
-			const obj = {
-				main: currName,
-				candidates: randomFiles.map(f => f.basename)
-			};
-			console.log(JSON.stringify(obj));
-
-			const response = await this.openai.createChatCompletion({
-				model: "gpt-3.5-turbo", messages: [
-					{ role: "system", content: "Permutate main with every candidate, for each create short sentence that uses both words. Return as JSON with every candidate as key and sentence as value" },
-					{ role: "user", content: JSON.stringify(obj) },
-				]
-			});
-
-			const title = "J'ai trouvé des associations avec " + currName;
-			console.log(response.data)
-			const parsedResp = JSON.parse(response.data.choices[0].message?.content!);
-
-			new AssociatedWordsModal(this.app, parsedResp, title).open();
 			this.lock = false;
 		});
 

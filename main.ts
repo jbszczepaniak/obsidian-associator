@@ -14,6 +14,7 @@ function getRandomSubset(arr: TFile[], size: Number) {
 }
 
 import { Configuration, OpenAIApi } from "openai";
+import { workerData } from 'worker_threads';
 
 
 
@@ -27,34 +28,33 @@ export default class MyPlugin extends Plugin {
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon('arrow-up-down', 'Sample Plugin', async (evt: MouseEvent) => {
 			const currName = this.app.workspace.getActiveFile()?.basename;
-			console.log(currName);
+
 			const allFiles = this.app.vault.getFiles()
-			const SUBSET_SIZE = 20;
+			const SUBSET_SIZE = 3;
 			const randomFiles = getRandomSubset(allFiles, SUBSET_SIZE)
-				.filter(n => !n.basename.startsWith("PNG")); // screenshots are saved in the vault with PNG at the front.
+				.filter(n => !n.basename.startsWith("PNG")) // screenshots are saved in the vault with PNG at the front.
+				.filter(n => !n.basename.startsWith("Screenshot")) // screenshots are saved in the vault with Screenshot at the front.
+				.filter(n => !n.basename.startsWith("Untitled")); // new notes starts like that
 
-			let message = "Entre les mots: "
-			randomFiles.forEach((file: TFile) => {
-				message += file.basename + ", "
-			})
-			message += ". Choisit un mot entre , qui et mieux associé avec "
-				+ currName + ". Utilisiez un mot choisit avec un mot donne dans un court sentence."
+			const obj = {
+				main: currName,
+				candidates: randomFiles.map(f => f.basename)
+			};
+			console.log(JSON.stringify(obj));
 
-			console.log(message);
 			const response = await this.openai.createChatCompletion({
 				model: "gpt-3.5-turbo", messages: [
-					{ role: "user", content: message },
+					{ role: "system", content: "Permutate main with every candidate, for each create short sentence that uses both words. Return as JSON with every candidate as key and sentence as value" },
+					{ role: "user", content: JSON.stringify(obj) },
 				]
 			});
 
-			const title = "J'ai trouvé un association";
-			const responseText = response.data.choices[0].message?.content;
+			const title = "J'ai trouvé des associations avec " + currName;
+			console.log(response.data)
+			const parsedResp = JSON.parse(response.data.choices[0].message?.content!);
 
-			new SampleModal(this.app, responseText!, title).open();
+			new SampleModal(this.app, parsedResp, title).open();
 		});
-
-		// Perform additional things with the ribbon
-		// ribbonIconEl.addClass('my-plugin-ribbon-class'); // we could change it into loading while user is waiting for response?
 
 		this.addSettingTab(new ExampleSettingTab(this.app, this));
 	}
@@ -79,19 +79,25 @@ export default class MyPlugin extends Plugin {
 
 class SampleModal extends Modal {
 	title: string;
-	msg: string;
+	msg: object;
 
 
-	constructor(app: App, msg: string, title: string) {
+	constructor(app: App, msg: object, title: string) {
 		super(app);
 		this.msg = msg;
 		this.title = title;
 	}
 
 	onOpen() {
-		const { titleEl, contentEl } = this;
+		const { titleEl, contentEl, } = this;
 		titleEl.setText(this.title);
-		contentEl.setText(this.msg);
+
+		Object.keys(this.msg).forEach(k => {
+			console.log(k, this.msg[k])
+			contentEl.createDiv
+			contentEl.createEl("h3", { text: k });
+			contentEl.createEl("p", { text: this.msg[k] })
+		})
 	}
 
 	onClose() {

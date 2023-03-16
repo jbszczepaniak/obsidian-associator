@@ -1,4 +1,5 @@
 import { App, Modal, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
+import { Configuration, OpenAIApi } from "openai";
 
 interface MyPluginSettings {
 	OpenAItoken: string;
@@ -13,9 +14,9 @@ function getRandomSubset(arr: TFile[], size: Number) {
 	return arr.filter((v, i) => random.has(i));
 }
 
-import { Configuration, OpenAIApi } from "openai";
-import { workerData } from 'worker_threads';
 
+
+const SUBSET_SIZE = 3;
 
 
 export default class MyPlugin extends Plugin {
@@ -29,8 +30,21 @@ export default class MyPlugin extends Plugin {
 		const ribbonIconEl = this.addRibbonIcon('arrow-up-down', 'Sample Plugin', async (evt: MouseEvent) => {
 			const currName = this.app.workspace.getActiveFile()?.basename;
 
+			// if-else/strategy for noobs.
+			const selected = window.getSelection()?.toString();
+			if (selected != "") {
+				console.log(selected)
+				const response = await this.openai.createChatCompletion({
+					model: "gpt-3.5-turbo", messages: [
+						{ role: "user", content: "Devinez le mot - \"" + selected + "\". Repondez avec un seul mot." },
+					]
+				});
+				console.log(response.data.choices[0].message?.content!)
+				new GuessedNameModal(this.app, response.data.choices[0].message?.content!, currName!).open();
+				return;
+			}
+
 			const allFiles = this.app.vault.getFiles()
-			const SUBSET_SIZE = 3;
 			const randomFiles = getRandomSubset(allFiles, SUBSET_SIZE)
 				.filter(n => !n.basename.startsWith("PNG")) // screenshots are saved in the vault with PNG at the front.
 				.filter(n => !n.basename.startsWith("Screenshot")) // screenshots are saved in the vault with Screenshot at the front.
@@ -53,7 +67,7 @@ export default class MyPlugin extends Plugin {
 			console.log(response.data)
 			const parsedResp = JSON.parse(response.data.choices[0].message?.content!);
 
-			new SampleModal(this.app, parsedResp, title).open();
+			new AssociatedWordsModal(this.app, parsedResp, title).open();
 		});
 
 		this.addSettingTab(new ExampleSettingTab(this.app, this));
@@ -76,8 +90,35 @@ export default class MyPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 }
+class GuessedNameModal extends Modal {
+	guessed: string;
+	actual: string;
 
-class SampleModal extends Modal {
+	constructor(app: App, guessed: string, actual: string) {
+		super(app);
+		this.guessed = guessed;
+		this.actual = actual;
+	}
+
+	onOpen() {
+		const { titleEl, contentEl, } = this;
+		titleEl.setText("Toi vs IA");
+
+		contentEl.createEl("h3", { text: "toi" });
+		contentEl.createEl("p", { text: this.actual })
+
+		contentEl.createEl("h3", { text: "ia" });
+		contentEl.createEl("p", { text: this.guessed })
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+
+}
+
+class AssociatedWordsModal extends Modal {
 	title: string;
 	msg: object;
 
@@ -93,8 +134,6 @@ class SampleModal extends Modal {
 		titleEl.setText(this.title);
 
 		Object.keys(this.msg).forEach(k => {
-			console.log(k, this.msg[k])
-			contentEl.createDiv
 			contentEl.createEl("h3", { text: k });
 			contentEl.createEl("p", { text: this.msg[k] })
 		})
